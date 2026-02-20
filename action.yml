@@ -1,0 +1,388 @@
+name: No Autopilot
+description: >
+  Gentle PR guardrails that encourage human ownership.
+  Use AI all you want — just don't submit on autopilot.
+
+inputs:
+  marker:
+    description: HTML comment used to identify the bot's comment (for upsert/delete)
+    required: false
+    default: '<!-- no-autopilot -->'
+
+  ai-names:
+    description: >
+      Pipe-separated list of AI tool names to detect in co-author lines and footers.
+    required: false
+    default: 'claude|copilot|chatgpt|cursor|anthropic|openai|gemini|gpt-4|gpt-5|devin|codeium|tabnine|cody|windsurf|supermaven|goose|codex|aider|lovable|bolt|v0|replit|sweep|sourcegraph'
+
+  contributing-url:
+    description: URL to your CONTRIBUTING.md (used in comment links). Leave empty to auto-detect.
+    required: false
+    default: ''
+
+  guidelines-url:
+    description: URL to additional guidelines (e.g. AGENTS.md). Leave empty to omit.
+    required: false
+    default: ''
+
+  template-sections:
+    description: >
+      Comma-separated list of required PR template section headers
+      (matched as "## Section Name" in the PR body). Set to "" to skip this check.
+    required: false
+    default: 'What this changes, How I tested this'
+
+  honesty-trap:
+    description: >
+      Text of the honesty-trap checkbox (without the "- [ ] " prefix).
+      If a PR checks this box, the PR is closed with a comment.
+      Set to "" to disable.
+    required: false
+    default: 'I did not answer truthfully'
+
+  boilerplate-patterns:
+    description: >
+      JSON array of [regex, label] pairs to detect boilerplate in the PR body.
+      At least 2 must match to trigger a warning. Set to "[]" to disable.
+    required: false
+    default: >-
+      [
+        ["You can make Copilot smarter by setting up custom instructions", "Copilot boilerplate"],
+        ["This (comprehensive|robust|elegant|streamlined) (solution|implementation|approach|change)", "AI puffery"],
+        ["(Shall I|Would you like me to|Want me to)", "AI offer to continue"]
+      ]
+
+  welcome-first-timers:
+    description: Whether to post a welcome note for first-time contributors.
+    required: false
+    default: 'true'
+
+  close-on-honesty-trap:
+    description: Whether to close the PR when the honesty trap is triggered.
+    required: false
+    default: 'true'
+
+runs:
+  using: composite
+  steps:
+    - name: Check PR compliance
+      uses: actions/github-script@v7
+      env:
+        INPUT_MARKER: ${{ inputs.marker }}
+        INPUT_AI_NAMES: ${{ inputs.ai-names }}
+        INPUT_CONTRIBUTING_URL: ${{ inputs.contributing-url }}
+        INPUT_GUIDELINES_URL: ${{ inputs.guidelines-url }}
+        INPUT_TEMPLATE_SECTIONS: ${{ inputs.template-sections }}
+        INPUT_HONESTY_TRAP: ${{ inputs.honesty-trap }}
+        INPUT_BOILERPLATE_PATTERNS: ${{ inputs.boilerplate-patterns }}
+        INPUT_WELCOME_FIRST_TIMERS: ${{ inputs.welcome-first-timers }}
+        INPUT_CLOSE_ON_HONESTY_TRAP: ${{ inputs.close-on-honesty-trap }}
+      with:
+        script: |
+          const pr = context.payload.pull_request;
+          const body = pr.body || '';
+          const prNumber = pr.number;
+          const action = context.payload.action;
+          const association = pr.author_association;
+
+          const MARKER = process.env.INPUT_MARKER;
+          const AI_NAMES = process.env.INPUT_AI_NAMES;
+          const contributingUrl = process.env.INPUT_CONTRIBUTING_URL ||
+            `https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/CONTRIBUTING.md`;
+          const guidelinesUrl = process.env.INPUT_GUIDELINES_URL;
+          const templateSections = process.env.INPUT_TEMPLATE_SECTIONS
+            ? process.env.INPUT_TEMPLATE_SECTIONS.split(',').map(s => s.trim()).filter(Boolean)
+            : [];
+          const honestyTrap = process.env.INPUT_HONESTY_TRAP;
+          const welcomeFirstTimers = process.env.INPUT_WELCOME_FIRST_TIMERS === 'true';
+          const closeOnHonestyTrap = process.env.INPUT_CLOSE_ON_HONESTY_TRAP === 'true';
+
+          let boilerplateChecks = [];
+          try {
+            boilerplateChecks = JSON.parse(process.env.INPUT_BOILERPLATE_PATTERNS)
+              .map(([re, label]) => [new RegExp(re, 'i'), label]);
+          } catch (e) {
+            // Invalid JSON — skip boilerplate checks
+          }
+
+          // --- Helpers ---
+
+          async function findBotComment() {
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+            });
+            return comments.find(c => c.body && c.body.includes(MARKER));
+          }
+
+          async function upsertComment(message) {
+            const existing = await findBotComment();
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body: message,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: message,
+              });
+            }
+          }
+
+          async function deleteBotComment() {
+            const existing = await findBotComment();
+            if (existing) {
+              await github.rest.issues.deleteComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+              });
+            }
+          }
+
+          function sectionIsEmpty(header) {
+            const escaped = header.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const re = new RegExp('## ' + escaped + '\\s*\\n([\\s\\S]*?)(?=\\n## |$)');
+            const match = body.match(re);
+            if (!match) return false;
+            return match[1].replace(/<!--[\s\S]*?-->/g, '').trim().length === 0;
+          }
+
+          // ======================
+          // Honesty trap
+          // ======================
+
+          if (honestyTrap) {
+            const escaped = honestyTrap.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const trapRe = new RegExp('- \\[x\\] ' + escaped, 'i');
+
+            if (trapRe.test(body)) {
+              const lines = [
+                MARKER,
+                '',
+                'The checklist includes a question meant to confirm each item was read carefully.',
+                'The checked box indicates the answers above may not be accurate.',
+              ];
+
+              if (closeOnHonestyTrap) {
+                lines.push(
+                  '',
+                  'This PR has been closed. Here\'s what to do:',
+                  '',
+                  `1. Read [CONTRIBUTING.md](${contributingUrl})`,
+                  '2. Review your checklist answers',
+                  '3. Reopen the PR once everything is in order',
+                  '',
+                  'No harm done — take your time.',
+                );
+              } else {
+                lines.push(
+                  '',
+                  'Please review your checklist answers and update the PR.',
+                );
+              }
+
+              await upsertComment(lines.join('\n'));
+
+              if (closeOnHonestyTrap) {
+                await github.rest.pulls.update({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  pull_number: prNumber,
+                  state: 'closed',
+                });
+              }
+
+              core.setFailed('Honesty trap triggered.');
+              return;
+            }
+          }
+
+          // ======================
+          // Check 1: AI attribution in commits
+          // ======================
+
+          const { data: commits } = await github.rest.pulls.listCommits({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            pull_number: prNumber,
+            per_page: 250,
+          });
+
+          const aiCommitPattern = new RegExp(
+            `co-authored-by:.*\\b(${AI_NAMES})\\b`, 'i'
+          );
+
+          const flaggedCommits = commits
+            .map(c => ({ sha: c.sha.slice(0, 7), msg: c.commit.message }))
+            .filter(c => aiCommitPattern.test(c.msg))
+            .map(c => ({ sha: c.sha, line: c.msg.match(aiCommitPattern)[0].trim() }));
+
+          // ======================
+          // Check 2: AI footers in PR body
+          // ======================
+
+          const footerPatterns = [
+            new RegExp(`generated (with|by) \\[?(${AI_NAMES})`, 'i'),
+            /🤖\s*generated/i,
+            new RegExp(`co-authored-by:.*\\b(${AI_NAMES})\\b`, 'i'),
+          ];
+
+          const footerFindings = footerPatterns
+            .map(p => body.match(p))
+            .filter(Boolean)
+            .map(m => m[0].trim());
+
+          // ======================
+          // Check 3: Unfilled PR template
+          // ======================
+
+          const templateIssues = [];
+
+          if (templateSections.length > 0) {
+            if (body.trim().length === 0) {
+              templateIssues.push('empty');
+            } else {
+              const emptySections = templateSections.filter(s => sectionIsEmpty(s));
+              if (emptySections.length > 0) {
+                templateIssues.push({ type: 'empty_sections', sections: emptySections });
+              }
+
+              const unchecked = (body.match(/- \[ \] .+/g) || []);
+              const filtered = honestyTrap
+                ? unchecked.filter(line => {
+                    const escaped = honestyTrap.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                    return !new RegExp(escaped, 'i').test(line);
+                  })
+                : unchecked;
+              if (filtered.length > 0)
+                templateIssues.push({ type: 'unchecked' });
+            }
+          }
+
+          // ======================
+          // Check 4: Boilerplate phrase detection
+          // ======================
+
+          const boilerplateFound = boilerplateChecks
+            .filter(([re]) => re.test(body))
+            .map(([, label]) => label);
+
+          // ======================
+          // Build findings
+          // ======================
+
+          const blocking = [];
+          const warnings = [];
+          const info = [];
+
+          if (flaggedCommits.length > 0) {
+            const list = flaggedCommits.map(c => `  - \`${c.sha}\`: \`${c.line}\``).join('\n');
+            blocking.push(
+              '**AI attribution in commits**\n\n' +
+              list + '\n\n' +
+              `From [CONTRIBUTING.md](${contributingUrl}): ` +
+              '"Remove AI-generated footers, co-author attributions, and ' +
+              "'Generated with...' signatures before submitting.\"\n\n" +
+              'Please amend the affected commits to remove these lines. ' +
+              'Using AI tools is fine — the ask is that you review and own the final submission.'
+            );
+          }
+
+          if (footerFindings.length > 0) {
+            blocking.push(
+              '**AI-generated footer in PR description**\n\n' +
+              'Found: ' + footerFindings.map(f => '`' + f + '`').join(', ') + '\n\n' +
+              'Please edit the PR description to remove AI-generated attribution.'
+            );
+          }
+
+          if (templateIssues.some(i => i === 'empty')) {
+            warnings.push(
+              '**Empty PR description**\n\n' +
+              'This PR has no description. Please fill in the PR template — ' +
+              'it helps reviewers understand what you changed and why.'
+            );
+          } else {
+            const emptyEntry = templateIssues.find(i => i.type === 'empty_sections');
+            if (emptyEntry) {
+              const names = emptyEntry.sections.map(s => `"${s}"`).join(', ');
+              warnings.push(
+                '**Unfilled template sections**\n\n' +
+                'These sections appear unfilled: ' + names + '. ' +
+                'Please describe your changes and how you verified them.'
+              );
+            }
+
+            if (templateIssues.some(i => i.type === 'unchecked')) {
+              warnings.push(
+                '**Unchecked items in the PR checklist**\n\n' +
+                'Each checkbox is an attestation — please fill them in honestly. ' +
+                "If one doesn't apply to your change, note why in the description."
+              );
+            }
+          }
+
+          if (boilerplateFound.length >= 2) {
+            warnings.push(
+              '**PR description may contain unedited AI output**\n\n' +
+              'Detected patterns commonly found in AI-generated text: ' +
+              boilerplateFound.join(', ') + '.\n\n' +
+              'Please rewrite in your own words. Using AI to draft is fine — ' +
+              'just make the final text yours.'
+            );
+          }
+
+          // Welcome first-time contributors on open/reopen
+          if (welcomeFirstTimers &&
+              ['FIRST_TIME_CONTRIBUTOR', 'FIRST_TIMER'].includes(association) &&
+              ['opened', 'reopened'].includes(action)) {
+            const links = [`[CONTRIBUTING.md](${contributingUrl})`];
+            if (guidelinesUrl) {
+              links.push(`[project guidelines](${guidelinesUrl})`);
+            }
+            info.push(
+              "Welcome — and thanks for the contribution. If you haven't already, " +
+              'please read ' + links.join(' and ') + '.'
+            );
+          }
+
+          // ======================
+          // Post, update, or remove comment
+          // ======================
+
+          if (blocking.length === 0 && warnings.length === 0 && info.length === 0) {
+            await deleteBotComment();
+            return;
+          }
+
+          const parts = [MARKER, ''];
+
+          if (blocking.length > 0) {
+            parts.push('### Needs attention before review', '');
+            blocking.forEach(b => parts.push(b, ''));
+          }
+
+          if (warnings.length > 0) {
+            parts.push('### Worth a look', '');
+            warnings.forEach(w => parts.push(w, ''));
+          }
+
+          if (info.length > 0) {
+            parts.push('---', '');
+            info.forEach(i => parts.push(i, ''));
+          }
+
+          await upsertComment(parts.join('\n'));
+
+          if (blocking.length > 0) {
+            core.setFailed(
+              'PR has issues that need attention. See the review comment for details.'
+            );
+          }
