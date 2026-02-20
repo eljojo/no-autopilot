@@ -1,7 +1,9 @@
 name: No Autopilot
-description: >
-  Gentle PR guardrails that encourage human ownership.
-  Use AI all you want — just don't submit on autopilot.
+description: CI for mindless PRs. Save time by filtering low-quality PRs.
+
+branding:
+  icon: 'check-square'
+  color: 'green'
 
 inputs:
   marker:
