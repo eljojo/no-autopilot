@@ -139,6 +139,11 @@ All inputs are optional.
     # Set to false to just fail the check without closing.
     close-on-honesty-trap: 'true'
 
+    # Repeat-trigger window (in hours) for auto-close escalation.
+    # 0 = close immediately when trap is triggered and close-on-honesty-trap=true.
+    # >0 = warn first, close only if trap is triggered again within this window.
+    honesty-trap-cooldown-hours: '24'
+
     # URL to your CONTRIBUTING.md (auto-detected from the repo if not set).
     contributing-url: ''
 
