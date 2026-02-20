@@ -162,6 +162,10 @@ All inputs are optional.
     # HTML comment marker used to identify the bot's comment.
     # Change this only if you run multiple instances on one repo.
     marker: '<!-- no-autopilot -->'
+
+    # Comment management style:
+    # update = single upserted comment, timeline = append-only history.
+    comment-mode: 'timeline'
 ```
 
 ## How it works (technical)

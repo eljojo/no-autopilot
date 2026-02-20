@@ -66,6 +66,13 @@ inputs:
     required: false
     default: 'true'
 
+  comment-mode:
+    description: >
+      How bot comments are managed: update (single evolving comment) or timeline
+      (append-only history comments).
+    required: false
+    default: 'update'
+
 runs:
   using: composite
   steps:
@@ -81,6 +88,7 @@ runs:
         INPUT_BOILERPLATE_PATTERNS: ${{ inputs.boilerplate-patterns }}
         INPUT_WELCOME_FIRST_TIMERS: ${{ inputs.welcome-first-timers }}
         INPUT_CLOSE_ON_HONESTY_TRAP: ${{ inputs.close-on-honesty-trap }}
+        INPUT_COMMENT_MODE: ${{ inputs.comment-mode }}
       with:
         script: |
           const pr = context.payload.pull_request;
@@ -101,6 +109,7 @@ runs:
             .split('|').map(s => s.trim()).filter(Boolean);
           const welcomeFirstTimers = process.env.INPUT_WELCOME_FIRST_TIMERS === 'true';
           const closeOnHonestyTrap = process.env.INPUT_CLOSE_ON_HONESTY_TRAP === 'true';
+          const commentMode = (process.env.INPUT_COMMENT_MODE || 'update').trim().toLowerCase();
 
           let boilerplateChecks = [];
           try {
@@ -118,12 +127,24 @@ runs:
               repo: context.repo.repo,
               issue_number: prNumber,
             });
-            return comments.find(c => c.body && c.body.includes(MARKER));
+            return comments
+              .filter(c => c.body && c.body.includes(MARKER))
+              .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
           }
 
           async function upsertComment(message) {
+            if (commentMode === 'timeline') {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: message,
+              });
+              return;
+            }
+
             const existing = await findBotComment();
-            if (existing) {
+            if (existing && commentMode !== 'timeline') {
               await github.rest.issues.updateComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -141,6 +162,9 @@ runs:
           }
 
           async function deleteBotComment() {
+            if (commentMode === 'timeline') {
+              return;
+            }
             const existing = await findBotComment();
             if (existing) {
               await github.rest.issues.deleteComment({
