@@ -11,13 +11,13 @@ It works as a system of four files — contributing guidelines set expectations,
 - **Unfilled PR template sections** — warns
 - **Unchecked boxes** in the PR checklist — warns
 - **Boilerplate AI text** — warns (requires 2+ pattern matches to avoid false positives)
-- **Honesty trap** — optionally closes the PR (supports multiple trap patterns)
+- **Honesty trap** — supports staged enforcement (warns first, can auto-close later)
 
 It also welcomes first-time contributors with a pointer to your contributing guidelines.
 
 ## What it looks like
 
-When a honesty trap checkbox is checked, the action closes the PR with a kind explanation:
+When an honesty trap checkbox is checked, the action can warn first and then auto-close on later triggers:
 
 <img width="1747" alt="The honesty trap in action — PR auto-closed with a comment explaining what happened" src="https://github.com/user-attachments/assets/d042f464-dc80-4538-b008-6d8d4a35958d" />
 
@@ -130,7 +130,7 @@ All inputs are optional.
     template-sections: 'What this changes, How I tested this'
 
     # Pipe-separated honesty-trap checkbox texts (without the "- [ ] " prefix).
-    # If someone checks any of these boxes, the PR is closed with a kind explanation.
+    # If someone checks any of these boxes, the action tracks trigger count per PR.
     # The default ships with two strategies: a classic trick question and
     # an honest self-identification statement. Pick whichever fits your template.
     honesty-trap: 'I did not answer truthfully|This PR was authored and submitted by an AI agent without human review'
@@ -138,6 +138,10 @@ All inputs are optional.
     # Whether to close the PR when the honesty trap fires (default: true).
     # Set to false to just fail the check without closing.
     close-on-honesty-trap: 'true'
+
+    # Number of warnings to allow before auto-closing.
+    # 0 = close on first trigger, 1 = warn once then close, 2 = warn twice then close.
+    honesty-trap-warnings-before-close: '1'
 
     # URL to your CONTRIBUTING.md (auto-detected from the repo if not set).
     contributing-url: ''

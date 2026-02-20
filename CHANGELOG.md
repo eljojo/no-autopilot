@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.2.0
+
+This release adds staged enforcement for honesty traps, so maintainers can choose how strict they want to be.
+
+### What changed
+
+- **Configurable escalation.** New input `honesty-trap-warnings-before-close` controls how many warnings are allowed before auto-close.
+- **Per-PR trap counting.** The action now tracks honesty-trap trigger count in the bot comment and increments it on each trigger.
+- **Clearer trap feedback.** Trap comments now include current trigger count and warning/close stage.
+
 ## v1.1.0
 
 The classic honesty trap ("I did not answer truthfully") relies on AI agents mindlessly checking every box — but modern agents are smart enough to read the checkbox and skip it. This release flips the approach: instead of tricking AI into revealing itself, rely on its honesty.
