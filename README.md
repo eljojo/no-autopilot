@@ -6,27 +6,37 @@ Gentle PR guardrails that encourage human ownership. Use AI all you want — jus
 
 This isn't just a CI check. It's a system of four files that work together — each one reinforcing the others.
 
+Think of it as a linter for contribution style — not *what* you wrote, but *how you showed up*. Like a dress code: no shoes, no shirt, no service.
+
 ```mermaid
-graph LR
-    C[CONTRIBUTING.md] -->|"sets expectations<br/>for humans"| T[PR template]
-    A[AGENTS.md] -->|"sets expectations<br/>for AI tools"| T
-    T -->|"checkboxes + sections<br/>become attestation"| N["no-autopilot<br/>(CI action)"]
-    N -->|"links back to"| C
+flowchart TD
+    subgraph rules["The rules"]
+        C["CONTRIBUTING.md minimum standard for humans"]
+        A["AGENTS.md tells bots: read the rules, inform your user"]
+    end
+    subgraph enforcement["The enforcement"]
+        T["PR template, checkboxes as attestation"]
+        N["no-autopilot (CI), checks commits + PR body"]
+    end
+    C --> T
+    A --> T
+    T --> N
+    N -.->|"flags violations, links back to rules"| C
 ```
 
-**`CONTRIBUTING.md`** defines what "careful" means — own every line, rewrite AI output, remove attribution footers. **`AGENTS.md`** tells AI coding tools to stop and inform the user about these guidelines *before* creating a PR. **The PR template** turns those expectations into checkboxes — each one an attestation. And **no-autopilot** (the CI action) verifies the attestation: checking for AI co-author lines, unfilled sections, and a honesty trap that catches people who check every box without reading.
+**`CONTRIBUTING.md`** is the dress code. It sets a minimum standard: own every line, rewrite AI output, remove attribution footers. **`AGENTS.md`** tells AI tools to read the rules and inform their user *before* creating a PR — so the bot doesn't show up underdressed. **The PR template** turns the rules into checkboxes — each one an attestation. And **no-autopilot** (the CI action) checks the work: scanning commits for AI co-author lines, the PR body for boilerplate, and the checklist for a honesty trap that catches people who check every box without reading.
 
-Contributors who read the guidelines won't trigger the checks. That's the point — the goal is to prevent careless PRs, not to catch malicious ones. Someone determined to ignore the rules can still check every box and comply on the surface. But someone who forgot to read the contributing guidelines, or let an AI agent submit on their behalf without reviewing, will be gently caught and pointed in the right direction.
+Contributors who read the rules won't trigger the checks. That's the point — the goal is to prevent careless PRs, not to catch malicious ones. Someone determined to game the system can still check every box and comply on the surface. But someone who forgot to read the contributing guidelines, or let an AI agent submit on their behalf without reviewing, will be gently caught and pointed in the right direction.
 
 ## What it looks like
 
 When someone opens a PR with all checkboxes checked — including the honesty trap — the action closes the PR with a kind explanation:
 
-<img width="1747" alt="The honesty trap in action — PR auto-closed with a comment explaining what happened" src="https://github.com/user-attachments/assets/ce526333-85e9-426b-9933-3714fe59f243" />
+<img width="1747" alt="The honesty trap in action — PR auto-closed with a comment explaining what happened" src="https://github.com/user-attachments/assets/d042f464-dc80-4538-b008-6d8d4a35958d" />
 
 When a PR has unchecked boxes or empty template sections, it leaves a warning (but doesn't block):
 
-<img width="2013" alt="Warning comment on a PR with unchecked checklist items" src="https://github.com/user-attachments/assets/db06180e-2d6d-47cc-ac25-49086db938e6" />
+<img width="2013" alt="Warning comment on a PR with unchecked checklist items" src="https://github.com/user-attachments/assets/90799bb2-759d-4ba7-965b-eaff0d22bf2f" />
 
 The action leaves a single comment per PR. It updates the comment on each push and deletes it when all issues are resolved — no noise.
 
@@ -62,8 +72,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: eljojo/no-autopilot@v1
-        with:
-          contributing-url: 'https://github.com/your-org/your-repo/blob/main/CONTRIBUTING.md'
 ```
 
 With no configuration, it checks for AI attribution in commits and PR descriptions, and welcomes first-time contributors. But the action works best as part of the full system — read on.
