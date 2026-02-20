@@ -10,7 +10,7 @@
 
 bump-patch:
 	@git fetch --tags; \
-	current=$$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0"); \
+	current=$$(git describe --tags --match 'v*.*.*' --abbrev=0 2>/dev/null || echo "v0.0.0"); \
 	major=$$(echo $$current | cut -d. -f1 | tr -d v); \
 	minor=$$(echo $$current | cut -d. -f2); \
 	patch=$$(echo $$current | cut -d. -f3); \
@@ -24,7 +24,7 @@ bump-patch:
 
 bump-minor:
 	@git fetch --tags; \
-	current=$$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0"); \
+	current=$$(git describe --tags --match 'v*.*.*' --abbrev=0 2>/dev/null || echo "v0.0.0"); \
 	major=$$(echo $$current | cut -d. -f1 | tr -d v); \
 	minor=$$(echo $$current | cut -d. -f2); \
 	new="v$$major.$$((minor + 1)).0"; \
@@ -37,7 +37,7 @@ bump-minor:
 
 bump-major:
 	@git fetch --tags; \
-	current=$$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0"); \
+	current=$$(git describe --tags --match 'v*.*.*' --abbrev=0 2>/dev/null || echo "v0.0.0"); \
 	major=$$(echo $$current | cut -d. -f1 | tr -d v); \
 	new="v$$((major + 1)).0.0"; \
 	echo "Bumping $$current -> $$new"; \
