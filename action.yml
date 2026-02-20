@@ -66,6 +66,16 @@ inputs:
     required: false
     default: 'true'
 
+  first-timer-honesty-trap-warnings-before-close:
+    description: Warnings allowed before auto-close for first-time contributors.
+    required: false
+    default: '2'
+
+  established-honesty-trap-warnings-before-close:
+    description: Warnings allowed before auto-close for returning contributors.
+    required: false
+    default: '0'
+
 runs:
   using: composite
   steps:
@@ -81,6 +91,8 @@ runs:
         INPUT_BOILERPLATE_PATTERNS: ${{ inputs.boilerplate-patterns }}
         INPUT_WELCOME_FIRST_TIMERS: ${{ inputs.welcome-first-timers }}
         INPUT_CLOSE_ON_HONESTY_TRAP: ${{ inputs.close-on-honesty-trap }}
+        INPUT_FIRST_TIMER_HONESTY_WARNINGS: ${{ inputs.first-timer-honesty-trap-warnings-before-close }}
+        INPUT_ESTABLISHED_HONESTY_WARNINGS: ${{ inputs.established-honesty-trap-warnings-before-close }}
       with:
         script: |
           const pr = context.payload.pull_request;
@@ -101,6 +113,14 @@ runs:
             .split('|').map(s => s.trim()).filter(Boolean);
           const welcomeFirstTimers = process.env.INPUT_WELCOME_FIRST_TIMERS === 'true';
           const closeOnHonestyTrap = process.env.INPUT_CLOSE_ON_HONESTY_TRAP === 'true';
+          const firstTimerWarnings = Math.max(
+            0,
+            Number.parseInt(process.env.INPUT_FIRST_TIMER_HONESTY_WARNINGS || '2', 10) || 0
+          );
+          const establishedWarnings = Math.max(
+            0,
+            Number.parseInt(process.env.INPUT_ESTABLISHED_HONESTY_WARNINGS || '0', 10) || 0
+          );
 
           let boilerplateChecks = [];
           try {
@@ -151,6 +171,13 @@ runs:
             }
           }
 
+          function extractTrapCount(commentBody) {
+            const match = (commentBody || '').match(/<!-- no-autopilot:honesty-trap-count=(\d+) -->/);
+            if (!match) return 0;
+            const parsed = Number.parseInt(match[1], 10);
+            return Number.isNaN(parsed) ? 0 : parsed;
+          }
+
           function sectionIsEmpty(header) {
             const escaped = header.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const re = new RegExp('## ' + escaped + '\\s*\\n([\\s\\S]*?)(?=\\n## |$)');
@@ -171,15 +198,24 @@ runs:
             });
 
             if (triggeredTrap) {
+              const warningsBeforeClose = ['FIRST_TIME_CONTRIBUTOR', 'FIRST_TIMER'].includes(association)
+                ? firstTimerWarnings
+                : establishedWarnings;
+              const existing = await findBotComment();
+              const count = extractTrapCount(existing?.body || '') + 1;
+              const shouldClose = closeOnHonestyTrap && count > warningsBeforeClose;
               const lines = [
                 MARKER,
+                `<!-- no-autopilot:honesty-trap-count=${count} -->`,
                 '',
                 'This checkbox was checked in the PR checklist:',
                 '',
                 '> ' + triggeredTrap,
+                '',
+                `Trigger count on this PR: ${count}`,
               ];
 
-              if (closeOnHonestyTrap) {
+              if (shouldClose) {
                 lines.push(
                   '',
                   'This PR has been closed. Here\'s what to do:',
@@ -190,6 +226,15 @@ runs:
                   '',
                   'No harm done — take your time.',
                 );
+              } else if (closeOnHonestyTrap) {
+                const remaining = Math.max(0, warningsBeforeClose - count + 1);
+                lines.push(
+                  '',
+                  'This PR is still open (warning stage).',
+                  '',
+                  `Author profile warnings allowed before close: ${warningsBeforeClose}`,
+                  `Warnings remaining for this PR: ${remaining}`,
+                );
               } else {
                 lines.push(
                   '',
@@ -199,7 +244,7 @@ runs:
 
               await upsertComment(lines.join('\n'));
 
-              if (closeOnHonestyTrap) {
+              if (shouldClose) {
                 await github.rest.pulls.update({
                   owner: context.repo.owner,
                   repo: context.repo.repo,

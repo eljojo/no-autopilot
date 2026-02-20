@@ -139,6 +139,11 @@ All inputs are optional.
     # Set to false to just fail the check without closing.
     close-on-honesty-trap: 'true'
 
+    # Per-author risk profile for honesty-trap escalation:
+    # first-timers are allowed more warnings before close by default.
+    first-timer-honesty-trap-warnings-before-close: '2'
+    established-honesty-trap-warnings-before-close: '0'
+
     # URL to your CONTRIBUTING.md (auto-detected from the repo if not set).
     contributing-url: ''
 
