@@ -24,9 +24,13 @@ flowchart TD
     N -.->|"flags violations, links back to rules"| C
 ```
 
-**`CONTRIBUTING.md`** is the dress code. It sets a minimum standard: own every line, rewrite AI output, remove attribution footers. **`AGENTS.md`** tells AI tools to read the rules and inform their user *before* creating a PR — so the bot doesn't show up underdressed. **The PR template** turns the rules into checkboxes — each one an attestation. And **no-autopilot** (the CI action) checks the work: scanning commits for AI co-author lines, the PR body for boilerplate, and the checklist for a honesty trap that catches people who check every box without reading.
+**`CONTRIBUTING.md`** is the dress code. It sets a minimum standard: own every line, do your homework. **`AGENTS.md`** tells AI tools to read the rules and inform their user *before* creating a PR — so the bot doesn't show up underdressed.
 
-Contributors who read the rules won't trigger the checks. That's the point — the goal is to prevent careless PRs, not to catch malicious ones. Someone determined to game the system can still check every box and comply on the surface. But someone who forgot to read the contributing guidelines, or let an AI agent submit on their behalf without reviewing, will be gently caught and pointed in the right direction.
+**The PR template** turns the rules into checkboxes — each one an attestation.
+
+And **no-autopilot** (this CI action) checks the work: scanning commits for AI co-author lines, the PR body for boilerplate, and the checklist for a honesty trap that catches people who check every box without reading.
+
+Contributors who read the rules won't trigger the checks. **That's the point** — the goal is to prevent careless PRs, not to catch malicious ones. Someone determined to game the system can still check the right boxes and comply on the surface. But someone who forgot to read the contributing guidelines, or let an AI agent submit on their behalf without reviewing, will be gently caught and pointed in the right direction.
 
 ## What it looks like
 
