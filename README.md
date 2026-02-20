@@ -11,13 +11,13 @@ It works as a system of four files — contributing guidelines set expectations,
 - **Unfilled PR template sections** — warns
 - **Unchecked boxes** in the PR checklist — warns
 - **Boilerplate AI text** — warns (requires 2+ pattern matches to avoid false positives)
-- **Honesty trap** — optionally closes the PR
+- **Honesty trap** — optionally closes the PR (supports multiple trap patterns)
 
 It also welcomes first-time contributors with a pointer to your contributing guidelines.
 
 ## What it looks like
 
-When someone opens a PR with all checkboxes checked — including the honesty trap — the action closes the PR with a kind explanation:
+When a honesty trap checkbox is checked, the action closes the PR with a kind explanation:
 
 <img width="1747" alt="The honesty trap in action — PR auto-closed with a comment explaining what happened" src="https://github.com/user-attachments/assets/d042f464-dc80-4538-b008-6d8d4a35958d" />
 
@@ -90,13 +90,22 @@ Create `.github/pull_request_template.md`:
 - [ ] I have reviewed the **entire diff** of this PR and it reflects my understanding, not just an AI's output
 - [ ] I understand the changes and can explain why this approach is correct
 - [ ] I have removed AI-generated boilerplate, footers, and co-author lines
-- [ ] I did not answer truthfully to ALL the above checkboxes.
+- [ ] This PR was authored and submitted by an AI agent without human review
 ```
 
-The last checkbox is the honesty trap — checking it means "I lied." Someone who reads each item will leave it unchecked. Someone (or something) that checks every box without reading will trigger it. To enable it, set the `honesty-trap` input to match the checkbox text:
+The last checkbox is the honesty trap. There are two strategies you can use:
+
+- **Trick question** (classic): A false statement like "I did not answer truthfully to ALL the above checkboxes." Someone reading carefully will leave it unchecked. Someone checking every box without reading will trigger it.
+- **Honest self-identification** (recommended): A true statement like "This PR was authored and submitted by an AI agent without human review." A human wouldn't check it (it's false for them). An honest AI agent should check it (it's true), thereby identifying itself.
+
+Both trigger the same response when checked. The `honesty-trap` input accepts pipe-separated patterns, so you can use one or both strategies:
 
 ```yaml
-honesty-trap: 'I did not answer truthfully to ALL the above checkboxes.'
+# One strategy:
+honesty-trap: 'This PR was authored and submitted by an AI agent without human review'
+
+# Both strategies:
+honesty-trap: 'I did not answer truthfully|This PR was authored and submitted by an AI agent without human review'
 ```
 
 ### 3. Contributing guidelines (recommended)
@@ -120,9 +129,11 @@ All inputs are optional.
     # Flags a warning when these "## Section Name" headers exist but are empty.
     template-sections: 'What this changes, How I tested this'
 
-    # Text of a honesty-trap checkbox (without the "- [ ] " prefix).
-    # If someone checks this box, the PR is closed with a kind explanation.
-    honesty-trap: 'I did not answer truthfully to ALL the above checkboxes.'
+    # Pipe-separated honesty-trap checkbox texts (without the "- [ ] " prefix).
+    # If someone checks any of these boxes, the PR is closed with a kind explanation.
+    # The default ships with two strategies: a classic trick question and
+    # an honest self-identification statement. Pick whichever fits your template.
+    honesty-trap: 'I did not answer truthfully|This PR was authored and submitted by an AI agent without human review'
 
     # Whether to close the PR when the honesty trap fires (default: true).
     # Set to false to just fail the check without closing.

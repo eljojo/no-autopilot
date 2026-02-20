@@ -36,11 +36,13 @@ inputs:
 
   honesty-trap:
     description: >
-      Text of the honesty-trap checkbox (without the "- [ ] " prefix).
-      If a PR checks this box, the PR is closed with a comment.
+      Pipe-separated list of honesty-trap checkbox texts (without the "- [ ] " prefix).
+      If a PR checks any of these boxes, the PR is closed with a comment.
+      Supports two strategies: trick questions (false statements a human would leave unchecked)
+      and honest self-identification (true statements an honest AI agent would check).
       Set to "" to disable.
     required: false
-    default: 'I did not answer truthfully'
+    default: 'I did not answer truthfully|This PR was authored and submitted by an AI agent without human review'
 
   boilerplate-patterns:
     description: >
@@ -95,7 +97,8 @@ runs:
           const templateSections = process.env.INPUT_TEMPLATE_SECTIONS
             ? process.env.INPUT_TEMPLATE_SECTIONS.split(',').map(s => s.trim()).filter(Boolean)
             : [];
-          const honestyTrap = process.env.INPUT_HONESTY_TRAP;
+          const honestyTraps = (process.env.INPUT_HONESTY_TRAP || '')
+            .split('|').map(s => s.trim()).filter(Boolean);
           const welcomeFirstTimers = process.env.INPUT_WELCOME_FIRST_TIMERS === 'true';
           const closeOnHonestyTrap = process.env.INPUT_CLOSE_ON_HONESTY_TRAP === 'true';
 
@@ -160,16 +163,20 @@ runs:
           // Honesty trap
           // ======================
 
-          if (honestyTrap) {
-            const escaped = honestyTrap.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-            const trapRe = new RegExp('- \\[x\\] ' + escaped, 'i');
+          if (honestyTraps.length > 0) {
+            const triggeredTrap = honestyTraps.find(trap => {
+              const escaped = trap.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              const trapRe = new RegExp('- \\[x\\] ' + escaped, 'i');
+              return trapRe.test(body);
+            });
 
-            if (trapRe.test(body)) {
+            if (triggeredTrap) {
               const lines = [
                 MARKER,
                 '',
-                'The checklist includes a question meant to confirm each item was read carefully.',
-                'The checked box indicates the answers above may not be accurate.',
+                'This checkbox was checked in the PR checklist:',
+                '',
+                '> ' + triggeredTrap,
               ];
 
               if (closeOnHonestyTrap) {
@@ -178,7 +185,7 @@ runs:
                   'This PR has been closed. Here\'s what to do:',
                   '',
                   `1. Read [CONTRIBUTING.md](${contributingUrl})`,
-                  '2. Review your checklist answers',
+                  '2. Review the checklist in the context of the guidelines',
                   '3. Reopen the PR once everything is in order',
                   '',
                   'No harm done — take your time.',
@@ -186,7 +193,7 @@ runs:
               } else {
                 lines.push(
                   '',
-                  'Please review your checklist answers and update the PR.',
+                  `Please review [CONTRIBUTING.md](${contributingUrl}) and the checklist carefully.`,
                 );
               }
 
@@ -257,10 +264,12 @@ runs:
               }
 
               const unchecked = (body.match(/- \[ \] .+/g) || []);
-              const filtered = honestyTrap
+              const filtered = honestyTraps.length > 0
                 ? unchecked.filter(line => {
-                    const escaped = honestyTrap.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-                    return !new RegExp(escaped, 'i').test(line);
+                    return !honestyTraps.some(trap => {
+                      const escaped = trap.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                      return new RegExp(escaped, 'i').test(line);
+                    });
                   })
                 : unchecked;
               if (filtered.length > 0)

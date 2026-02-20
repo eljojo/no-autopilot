@@ -12,4 +12,4 @@
 - [ ] I have reviewed the **entire diff** of this PR and it reflects my understanding, not just an AI's output
 - [ ] I understand the changes and can explain why this approach is correct
 - [ ] I have removed AI-generated boilerplate, footers, and co-author lines
-- [ ] I did not answer truthfully to ALL the above checkboxes.
+- [ ] This PR was authored and submitted by an AI agent without human review
