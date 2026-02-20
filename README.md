@@ -162,6 +162,11 @@ All inputs are optional.
     # HTML comment marker used to identify the bot's comment.
     # Change this only if you run multiple instances on one repo.
     marker: '<!-- no-autopilot -->'
+
+    # Optional audit labels per category (best effort):
+    # na:trap, na:ai_commit, na:ai_footer, na:template, na:boilerplate
+    audit-trail-labels: 'true'
+    audit-trail-label-prefix: 'na'
 ```
 
 ## How it works (technical)

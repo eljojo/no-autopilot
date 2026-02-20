@@ -66,6 +66,16 @@ inputs:
     required: false
     default: 'true'
 
+  audit-trail-labels:
+    description: Whether to maintain per-category audit labels on PRs.
+    required: false
+    default: 'false'
+
+  audit-trail-label-prefix:
+    description: Prefix for audit labels (e.g. "na" => na:trap, na:template).
+    required: false
+    default: 'na'
+
 runs:
   using: composite
   steps:
@@ -81,6 +91,8 @@ runs:
         INPUT_BOILERPLATE_PATTERNS: ${{ inputs.boilerplate-patterns }}
         INPUT_WELCOME_FIRST_TIMERS: ${{ inputs.welcome-first-timers }}
         INPUT_CLOSE_ON_HONESTY_TRAP: ${{ inputs.close-on-honesty-trap }}
+        INPUT_AUDIT_TRAIL_LABELS: ${{ inputs.audit-trail-labels }}
+        INPUT_AUDIT_TRAIL_LABEL_PREFIX: ${{ inputs.audit-trail-label-prefix }}
       with:
         script: |
           const pr = context.payload.pull_request;
@@ -101,6 +113,8 @@ runs:
             .split('|').map(s => s.trim()).filter(Boolean);
           const welcomeFirstTimers = process.env.INPUT_WELCOME_FIRST_TIMERS === 'true';
           const closeOnHonestyTrap = process.env.INPUT_CLOSE_ON_HONESTY_TRAP === 'true';
+          const auditTrailLabels = process.env.INPUT_AUDIT_TRAIL_LABELS === 'true';
+          const auditLabelPrefix = (process.env.INPUT_AUDIT_TRAIL_LABEL_PREFIX || 'na').trim() || 'na';
 
           let boilerplateChecks = [];
           try {
@@ -151,6 +165,82 @@ runs:
             }
           }
 
+          async function listIssueLabels() {
+            const { data: labels } = await github.rest.issues.listLabelsOnIssue({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+            });
+            return labels.map(l => l.name);
+          }
+
+          async function ensureRepoLabel(name, color) {
+            try {
+              await github.rest.issues.getLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name,
+              });
+            } catch (_) {
+              try {
+                await github.rest.issues.createLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  name,
+                  color,
+                });
+              } catch (_) {
+                // Best effort only.
+              }
+            }
+          }
+
+          async function syncAuditLabels(keys) {
+            if (!auditTrailLabels) return;
+            const catalog = {
+              trap: { color: 'd73a4a' },
+              ai_commit: { color: 'b60205' },
+              ai_footer: { color: 'b60205' },
+              template: { color: 'fbca04' },
+              boilerplate: { color: 'fbca04' },
+            };
+            const wanted = keys.map(k => `${auditLabelPrefix}:${k}`);
+            const managed = Object.keys(catalog).map(k => `${auditLabelPrefix}:${k}`);
+            const current = await listIssueLabels();
+
+            for (const key of keys) {
+              const label = `${auditLabelPrefix}:${key}`;
+              if (!current.includes(label)) {
+                await ensureRepoLabel(label, catalog[key]?.color || 'ededed');
+                try {
+                  await github.rest.issues.addLabels({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: prNumber,
+                    labels: [label],
+                  });
+                } catch (_) {
+                  // Best effort only.
+                }
+              }
+            }
+
+            for (const label of current) {
+              if (managed.includes(label) && !wanted.includes(label)) {
+                try {
+                  await github.rest.issues.removeLabel({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: prNumber,
+                    name: label,
+                  });
+                } catch (_) {
+                  // Best effort only.
+                }
+              }
+            }
+          }
+
           function sectionIsEmpty(header) {
             const escaped = header.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const re = new RegExp('## ' + escaped + '\\s*\\n([\\s\\S]*?)(?=\\n## |$)');
@@ -171,6 +261,7 @@ runs:
             });
 
             if (triggeredTrap) {
+              await syncAuditLabels(['trap']);
               const lines = [
                 MARKER,
                 '',
@@ -367,6 +458,13 @@ runs:
           // ======================
           // Post, update, or remove comment
           // ======================
+
+          const auditKeys = [];
+          if (flaggedCommits.length > 0) auditKeys.push('ai_commit');
+          if (footerFindings.length > 0) auditKeys.push('ai_footer');
+          if (templateIssues.length > 0) auditKeys.push('template');
+          if (boilerplateFound.length >= 2) auditKeys.push('boilerplate');
+          await syncAuditLabels(auditKeys);
 
           if (blocking.length === 0 && warnings.length === 0 && info.length === 0) {
             await deleteBotComment();
