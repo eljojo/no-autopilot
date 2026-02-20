@@ -1,5 +1,16 @@
 # Changelog
 
+## v1.2.0
+
+Honesty traps now use a two-step flow by default: warn on first trigger, then close on repeat.
+
+### What changed
+
+- **Warn-first honesty trap.** A first trigger leaves the PR open with a corrective message.
+- **Close-on-repeat behavior.** If the same PR triggers the trap again and `close-on-honesty-trap` is enabled, the PR is auto-closed.
+- **Persistent state label.** Added `honesty-trap-repeat-label` input (default: `no-autopilot:honesty-trap-warned`) to track whether a PR has already been warned.
+- Updated docs to describe the new honesty trap lifecycle and configuration.
+
 ## v1.1.0
 
 The classic honesty trap ("I did not answer truthfully") relies on AI agents mindlessly checking every box — but modern agents are smart enough to read the checkbox and skip it. This release flips the approach: instead of tricking AI into revealing itself, rely on its honesty.

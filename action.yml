@@ -37,12 +37,20 @@ inputs:
   honesty-trap:
     description: >
       Pipe-separated list of honesty-trap checkbox texts (without the "- [ ] " prefix).
-      If a PR checks any of these boxes, the PR is closed with a comment.
+      If a PR checks any of these boxes, the action warns first and can close
+      the PR if the trap is triggered again.
       Supports two strategies: trick questions (false statements a human would leave unchecked)
       and honest self-identification (true statements an honest AI agent would check).
       Set to "" to disable.
     required: false
     default: 'I did not answer truthfully|This PR was authored and submitted by an AI agent without human review'
+
+  honesty-trap-repeat-label:
+    description: >
+      Label used to remember that this PR has already triggered an honesty trap once.
+      On subsequent triggers, the PR can be auto-closed if close-on-honesty-trap is true.
+    required: false
+    default: 'no-autopilot:honesty-trap-warned'
 
   boilerplate-patterns:
     description: >
@@ -62,7 +70,7 @@ inputs:
     default: 'true'
 
   close-on-honesty-trap:
-    description: Whether to close the PR when the honesty trap is triggered.
+    description: Whether to close the PR when the honesty trap is triggered again.
     required: false
     default: 'true'
 
@@ -78,6 +86,7 @@ runs:
         INPUT_GUIDELINES_URL: ${{ inputs.guidelines-url }}
         INPUT_TEMPLATE_SECTIONS: ${{ inputs.template-sections }}
         INPUT_HONESTY_TRAP: ${{ inputs.honesty-trap }}
+        INPUT_HONESTY_TRAP_REPEAT_LABEL: ${{ inputs.honesty-trap-repeat-label }}
         INPUT_BOILERPLATE_PATTERNS: ${{ inputs.boilerplate-patterns }}
         INPUT_WELCOME_FIRST_TIMERS: ${{ inputs.welcome-first-timers }}
         INPUT_CLOSE_ON_HONESTY_TRAP: ${{ inputs.close-on-honesty-trap }}
@@ -99,6 +108,7 @@ runs:
             : [];
           const honestyTraps = (process.env.INPUT_HONESTY_TRAP || '')
             .split('|').map(s => s.trim()).filter(Boolean);
+          const honestyTrapRepeatLabel = (process.env.INPUT_HONESTY_TRAP_REPEAT_LABEL || '').trim();
           const welcomeFirstTimers = process.env.INPUT_WELCOME_FIRST_TIMERS === 'true';
           const closeOnHonestyTrap = process.env.INPUT_CLOSE_ON_HONESTY_TRAP === 'true';
 
@@ -151,6 +161,33 @@ runs:
             }
           }
 
+          async function listIssueLabels() {
+            const { data: labels } = await github.rest.issues.listLabelsOnIssue({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+            });
+            return labels.map(l => l.name);
+          }
+
+          async function hasIssueLabel(labelName) {
+            if (!labelName) return false;
+            const labels = await listIssueLabels();
+            return labels.includes(labelName);
+          }
+
+          async function addIssueLabel(labelName) {
+            if (!labelName) return;
+            const labels = await listIssueLabels();
+            if (labels.includes(labelName)) return;
+            await github.rest.issues.addLabels({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber,
+              labels: [labelName],
+            });
+          }
+
           function sectionIsEmpty(header) {
             const escaped = header.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const re = new RegExp('## ' + escaped + '\\s*\\n([\\s\\S]*?)(?=\\n## |$)');
@@ -171,6 +208,7 @@ runs:
             });
 
             if (triggeredTrap) {
+              const hasPriorWarning = await hasIssueLabel(honestyTrapRepeatLabel);
               const lines = [
                 MARKER,
                 '',
@@ -179,7 +217,7 @@ runs:
                 '> ' + triggeredTrap,
               ];
 
-              if (closeOnHonestyTrap) {
+              if (closeOnHonestyTrap && hasPriorWarning) {
                 lines.push(
                   '',
                   'This PR has been closed. Here\'s what to do:',
@@ -190,6 +228,17 @@ runs:
                   '',
                   'No harm done — take your time.',
                 );
+              } else if (closeOnHonestyTrap) {
+                lines.push(
+                  '',
+                  'This is a warning on first trigger. The PR was left open.',
+                  '',
+                  `1. Read [CONTRIBUTING.md](${contributingUrl})`,
+                  '2. Update the checklist in the context of the guidelines',
+                  '3. Push changes and continue review',
+                  '',
+                  'If this trap is triggered again on this PR, it will be auto-closed.',
+                );
               } else {
                 lines.push(
                   '',
@@ -199,13 +248,15 @@ runs:
 
               await upsertComment(lines.join('\n'));
 
-              if (closeOnHonestyTrap) {
+              if (closeOnHonestyTrap && hasPriorWarning) {
                 await github.rest.pulls.update({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   pull_number: prNumber,
                   state: 'closed',
                 });
+              } else if (closeOnHonestyTrap) {
+                await addIssueLabel(honestyTrapRepeatLabel);
               }
 
               core.setFailed('Honesty trap triggered.');
