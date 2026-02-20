@@ -139,6 +139,10 @@ All inputs are optional.
     # Set to false to just fail the check without closing.
     close-on-honesty-trap: 'true'
 
+    # Preset policy behavior:
+    # custom (default), strict, balanced, onboarding
+    policy-pack: 'balanced'
+
     # URL to your CONTRIBUTING.md (auto-detected from the repo if not set).
     contributing-url: ''
 

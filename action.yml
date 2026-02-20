@@ -66,6 +66,13 @@ inputs:
     required: false
     default: 'true'
 
+  policy-pack:
+    description: >
+      Preset behavior pack: custom, strict, balanced, or onboarding.
+      custom keeps explicit input values; other presets override selected defaults.
+    required: false
+    default: 'custom'
+
 runs:
   using: composite
   steps:
@@ -81,6 +88,7 @@ runs:
         INPUT_BOILERPLATE_PATTERNS: ${{ inputs.boilerplate-patterns }}
         INPUT_WELCOME_FIRST_TIMERS: ${{ inputs.welcome-first-timers }}
         INPUT_CLOSE_ON_HONESTY_TRAP: ${{ inputs.close-on-honesty-trap }}
+        INPUT_POLICY_PACK: ${{ inputs.policy-pack }}
       with:
         script: |
           const pr = context.payload.pull_request;
@@ -94,13 +102,29 @@ runs:
           const contributingUrl = process.env.INPUT_CONTRIBUTING_URL ||
             `https://github.com/${context.repo.owner}/${context.repo.repo}/blob/main/CONTRIBUTING.md`;
           const guidelinesUrl = process.env.INPUT_GUIDELINES_URL;
-          const templateSections = process.env.INPUT_TEMPLATE_SECTIONS
+          let templateSections = process.env.INPUT_TEMPLATE_SECTIONS
             ? process.env.INPUT_TEMPLATE_SECTIONS.split(',').map(s => s.trim()).filter(Boolean)
             : [];
-          const honestyTraps = (process.env.INPUT_HONESTY_TRAP || '')
+          let honestyTraps = (process.env.INPUT_HONESTY_TRAP || '')
             .split('|').map(s => s.trim()).filter(Boolean);
-          const welcomeFirstTimers = process.env.INPUT_WELCOME_FIRST_TIMERS === 'true';
-          const closeOnHonestyTrap = process.env.INPUT_CLOSE_ON_HONESTY_TRAP === 'true';
+          let welcomeFirstTimers = process.env.INPUT_WELCOME_FIRST_TIMERS === 'true';
+          let closeOnHonestyTrap = process.env.INPUT_CLOSE_ON_HONESTY_TRAP === 'true';
+          const policyPack = (process.env.INPUT_POLICY_PACK || 'custom').trim().toLowerCase();
+
+          if (policyPack === 'strict') {
+            closeOnHonestyTrap = true;
+            welcomeFirstTimers = false;
+            if (templateSections.length === 0) {
+              templateSections = ['What this changes', 'How I tested this'];
+            }
+          } else if (policyPack === 'balanced') {
+            closeOnHonestyTrap = false;
+            welcomeFirstTimers = true;
+          } else if (policyPack === 'onboarding') {
+            closeOnHonestyTrap = false;
+            welcomeFirstTimers = true;
+            honestyTraps = [];
+          }
 
           let boilerplateChecks = [];
           try {
