@@ -5,6 +5,11 @@ branding:
   icon: 'check-square'
   color: 'green'
 
+outputs:
+  violations-json:
+    description: JSON summary of detected violations and warnings.
+    value: ${{ steps.check.outputs.violations-json }}
+
 inputs:
   marker:
     description: HTML comment used to identify the bot's comment (for upsert/delete)
@@ -70,6 +75,7 @@ runs:
   using: composite
   steps:
     - name: Check PR compliance
+      id: check
       uses: actions/github-script@v8
       env:
         INPUT_MARKER: ${{ inputs.marker }}
@@ -151,6 +157,10 @@ runs:
             }
           }
 
+          function emitViolationsOutput(summary) {
+            core.setOutput('violations-json', JSON.stringify(summary));
+          }
+
           function sectionIsEmpty(header) {
             const escaped = header.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const re = new RegExp('## ' + escaped + '\\s*\\n([\\s\\S]*?)(?=\\n## |$)');
@@ -171,6 +181,13 @@ runs:
             });
 
             if (triggeredTrap) {
+              emitViolationsOutput({
+                blocking: ['honesty_trap'],
+                warnings: [],
+                info: [],
+                details: { triggered_trap: triggeredTrap },
+              });
+
               const lines = [
                 MARKER,
                 '',
@@ -369,9 +386,32 @@ runs:
           // ======================
 
           if (blocking.length === 0 && warnings.length === 0 && info.length === 0) {
+            emitViolationsOutput({
+              blocking: [],
+              warnings: [],
+              info: [],
+              details: {
+                flagged_commits: 0,
+                footer_findings: 0,
+                template_issues: 0,
+                boilerplate_patterns: 0,
+              },
+            });
             await deleteBotComment();
             return;
           }
+
+          emitViolationsOutput({
+            blocking: blocking.map((_, i) => `blocking_${i + 1}`),
+            warnings: warnings.map((_, i) => `warning_${i + 1}`),
+            info,
+            details: {
+              flagged_commits: flaggedCommits.length,
+              footer_findings: footerFindings.length,
+              template_issues: templateIssues.length,
+              boilerplate_patterns: boilerplateFound.length,
+            },
+          });
 
           const parts = [MARKER, ''];
 

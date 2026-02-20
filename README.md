@@ -164,6 +164,10 @@ All inputs are optional.
     marker: '<!-- no-autopilot -->'
 ```
 
+This action also exposes a structured output:
+
+- `violations-json`: machine-readable summary of blocking findings, warnings, and signal counts.
+
 ## How it works (technical)
 
 - Runs on `pull_request_target` so it has write access to comment on PRs from forks
