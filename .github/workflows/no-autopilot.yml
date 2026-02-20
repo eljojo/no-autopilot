@@ -14,3 +14,4 @@ jobs:
       - uses: eljojo/no-autopilot@main
         with:
           guidelines-url: 'https://github.com/eljojo/no-autopilot/blob/main/AGENTS.md'
+          honesty-trap: 'This PR was authored and submitted by an AI agent without human review'
