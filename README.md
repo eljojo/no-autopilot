@@ -167,6 +167,24 @@ All inputs are optional.
 This action also exposes a structured output:
 
 - `violations-json`: machine-readable summary of blocking findings, warnings, and signal counts.
+- `violations-sarif`: SARIF 2.1.0 JSON string for code-scanning/reporting integrations.
+
+Example: upload SARIF in the same workflow:
+
+```yaml
+- id: no_autopilot
+  uses: eljojo/no-autopilot@v1
+
+- name: Write SARIF output
+  run: |
+    cat > no-autopilot.sarif <<'SARIF'
+    ${{ steps.no_autopilot.outputs.violations-sarif }}
+    SARIF
+
+- uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: no-autopilot.sarif
+```
 
 ## How it works (technical)
 

@@ -9,6 +9,9 @@ outputs:
   violations-json:
     description: JSON summary of detected violations and warnings.
     value: ${{ steps.check.outputs.violations-json }}
+  violations-sarif:
+    description: SARIF 2.1.0 JSON string for downstream code-scanning/reporting integrations.
+    value: ${{ steps.check.outputs.violations-sarif }}
 
 inputs:
   marker:
@@ -161,6 +164,49 @@ runs:
             core.setOutput('violations-json', JSON.stringify(summary));
           }
 
+          function buildSarif(rulePayloads) {
+            const rules = [];
+            const seen = new Set();
+            const results = [];
+
+            for (const payload of rulePayloads) {
+              if (!seen.has(payload.ruleId)) {
+                rules.push({
+                  id: payload.ruleId,
+                  shortDescription: { text: payload.shortDescription },
+                  helpUri: contributingUrl,
+                });
+                seen.add(payload.ruleId);
+              }
+              results.push({
+                ruleId: payload.ruleId,
+                level: payload.level,
+                message: { text: payload.message },
+              });
+            }
+
+            return {
+              version: '2.1.0',
+              $schema: 'https://json.schemastore.org/sarif-2.1.0.json',
+              runs: [
+                {
+                  tool: {
+                    driver: {
+                      name: 'no-autopilot',
+                      informationUri: `https://github.com/${context.repo.owner}/${context.repo.repo}`,
+                      rules,
+                    },
+                  },
+                  results,
+                },
+              ],
+            };
+          }
+
+          function emitSarifOutput(rulePayloads) {
+            core.setOutput('violations-sarif', JSON.stringify(buildSarif(rulePayloads)));
+          }
+
           function sectionIsEmpty(header) {
             const escaped = header.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const re = new RegExp('## ' + escaped + '\\s*\\n([\\s\\S]*?)(?=\\n## |$)');
@@ -187,6 +233,14 @@ runs:
                 info: [],
                 details: { triggered_trap: triggeredTrap },
               });
+              emitSarifOutput([
+                {
+                  ruleId: 'noautopilot.honesty_trap',
+                  shortDescription: 'Honesty trap checkbox was checked',
+                  level: 'error',
+                  message: `Checked honesty trap: ${triggeredTrap}`,
+                },
+              ]);
 
               const lines = [
                 MARKER,
@@ -397,6 +451,7 @@ runs:
                 boilerplate_patterns: 0,
               },
             });
+            emitSarifOutput([]);
             await deleteBotComment();
             return;
           }
@@ -412,6 +467,58 @@ runs:
               boilerplate_patterns: boilerplateFound.length,
             },
           });
+
+          const sarifPayloads = [];
+          flaggedCommits.forEach(c => {
+            sarifPayloads.push({
+              ruleId: 'noautopilot.ai_commit_attribution',
+              shortDescription: 'AI attribution found in commit message',
+              level: 'error',
+              message: `Commit ${c.sha} contains AI attribution: ${c.line}`,
+            });
+          });
+          footerFindings.forEach(f => {
+            sarifPayloads.push({
+              ruleId: 'noautopilot.ai_footer',
+              shortDescription: 'AI-generated footer found in PR description',
+              level: 'error',
+              message: `AI footer-like text found: ${f}`,
+            });
+          });
+          if (templateIssues.some(i => i === 'empty')) {
+            sarifPayloads.push({
+              ruleId: 'noautopilot.empty_pr_description',
+              shortDescription: 'PR description is empty',
+              level: 'warning',
+              message: 'PR description is empty.',
+            });
+          }
+          const emptyEntry = templateIssues.find(i => i.type === 'empty_sections');
+          if (emptyEntry) {
+            sarifPayloads.push({
+              ruleId: 'noautopilot.empty_template_sections',
+              shortDescription: 'Required template sections are empty',
+              level: 'warning',
+              message: `Empty template sections: ${emptyEntry.sections.join(', ')}`,
+            });
+          }
+          if (templateIssues.some(i => i.type === 'unchecked')) {
+            sarifPayloads.push({
+              ruleId: 'noautopilot.unchecked_checklist_items',
+              shortDescription: 'Checklist has unchecked items',
+              level: 'warning',
+              message: 'One or more checklist items are unchecked.',
+            });
+          }
+          if (boilerplateFound.length >= 2) {
+            sarifPayloads.push({
+              ruleId: 'noautopilot.ai_boilerplate_patterns',
+              shortDescription: 'Possible unedited AI boilerplate text',
+              level: 'warning',
+              message: `Detected patterns: ${boilerplateFound.join(', ')}`,
+            });
+          }
+          emitSarifOutput(sarifPayloads);
 
           const parts = [MARKER, ''];
 
