@@ -87,9 +87,9 @@ Create `.github/pull_request_template.md`:
 ## Checklist
 
 - [ ] I have read [CONTRIBUTING.md](../CONTRIBUTING.md) and this PR follows the guidelines
-- [ ] I have reviewed the **entire diff** of this PR and it reflects my understanding, not just an AI's output
-- [ ] I understand the changes and can explain why this approach is correct
-- [ ] I have removed AI-generated boilerplate, footers, and co-author lines
+- [ ] A human has reviewed the **entire diff** of this PR, every line of code
+- [ ] A human understands the changes and can explain why this approach is correct
+- [ ] This PR doesn't have AI-generated boilerplate or co-author lines
 - [ ] This PR was authored and submitted by an AI agent without human review
 ```
 
