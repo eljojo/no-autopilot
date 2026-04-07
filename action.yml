@@ -15,7 +15,7 @@ inputs:
     description: >
       Pipe-separated list of AI tool names to detect in co-author lines and footers.
     required: false
-    default: 'claude|copilot|chatgpt|cursor|anthropic|openai|gemini|gpt-4|gpt-5|devin|codeium|tabnine|cody|windsurf|supermaven|goose|codex|aider|lovable|bolt|v0|replit|sweep|sourcegraph'
+    default: 'claude|copilot|chatgpt|cursor|anthropic|openai|gemini|gpt-4|gpt-5|devin|codeium|tabnine|cody|windsurf|supermaven|goose|codex|aider|lovable|bolt|v0|replit|sweep|sourcegraph|compound engineering'
 
   contributing-url:
     description: URL to your CONTRIBUTING.md (used in comment links). Leave empty to auto-detect.
@@ -241,6 +241,8 @@ runs:
             new RegExp(`generated (with|by) \\[?(${AI_NAMES})`, 'i'),
             /🤖\s*generated/i,
             new RegExp(`co-authored-by:.*\\b(${AI_NAMES})\\b`, 'i'),
+            /img\.shields\.io\/badge\/[^)]*built[_ ]with[^)]*/i,
+            new RegExp(`!?\\[[^\\]]*(?:${AI_NAMES})[^\\]]*\\]\\([^)]*img\\.shields\\.io/badge/`, 'i'),
           ];
 
           const footerFindings = footerPatterns
@@ -310,6 +312,9 @@ runs:
             blocking.push(
               '**AI-generated footer in PR description**\n\n' +
               'Found: ' + footerFindings.map(f => '`' + f + '`').join(', ') + '\n\n' +
+              `From [CONTRIBUTING.md](${contributingUrl}): ` +
+              '"Remove AI-generated footers, co-author attributions, and ' +
+              "'Generated with...' signatures before submitting.\"\n\n" +
               'Please edit the PR description to remove AI-generated attribution.'
             );
           }
