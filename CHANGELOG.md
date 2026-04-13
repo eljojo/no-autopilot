@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.1.1
+
+Add support for more AI agents in signatures.
+
 ## v1.1.0
 
 The classic honesty trap ("I did not answer truthfully") relies on AI agents mindlessly checking every box — but modern agents are smart enough to read the checkbox and skip it. This release flips the approach: instead of tricking AI into revealing itself, rely on its honesty.
