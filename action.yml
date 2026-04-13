@@ -70,7 +70,7 @@ runs:
   using: composite
   steps:
     - name: Check PR compliance
-      uses: actions/github-script@v8
+      uses: actions/github-script@v9
       env:
         INPUT_MARKER: ${{ inputs.marker }}
         INPUT_AI_NAMES: ${{ inputs.ai-names }}
